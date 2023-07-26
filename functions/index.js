@@ -11,119 +11,183 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 const db = admin.firestore()
 
-//atemp one
-app.get('/home', validateToken, (req,res)=>{
+//Message
+const message = (success,data,error,msg,statusCode) =>{
+    const response = {
+        success: success,
+        data: data,
+        error: error,
+        message: msg,
+        statusCode: statusCode,
+    }
+    return response
+}
+
+//Control Function
+const controlFunction = async (email, action) => {
+    const control = {
+        email: email,
+        action: action,
+        date: Date()
+    }
+    await db.collection('control').add(control);
+    return control;
+};
+
+//Add data of artists
+app.post('/artist', validateToken, async (req, res) => {
     try {
-        res.status(200).sendFile( __dirname + '/home.html')
-    } catch (error) {
-        res.status(404).send('error')
+      const artist = req.body; 
+
+      if (!artist || artist.length === 0) {
+        response = message(false,null,'At least one artist is required',null,400)
+        return res.status(400).send(response)
+      }
+  
+      const addedArtists = [];
+  
+      for (const artists of artist) {
+        const { name, genre } = artists;
+        if (!name || !genre) {
+          response = message(false,null,'Name and genre are required for each artist',null,400)  
+          return res.status(400).send(response);
+        }
+  
+        const newArtist = {
+          name: name,
+          genre: genre,
+          delete: false,
+        };
+  
+        await db.collection('artist').add(newArtist);
+        addedArtists.push(newArtist);
+      }
+
+      //control
+      const token = req.headers['key'] || req.query.key;
+      const user = decodeToken(token)
+      controlFunction(user.email,'POST ARTISTS')
+  
+      response = message(true, addedArtists, null, 'Artists added successfully', 200);
+      return res.status(200).send(response);
+
+    } catch (err) {
+      response = message(false, null, err.message, 'Artists not added successfully', 400);
+      return res.status(400).send(response);
     }
 })
 
-
-//get date
+//Get data of a artist 
 app.get('/artist',validateToken, async(req, res) => {
     try{
-        const snapshot = await db.collection('artist').get()
-        let artist= []
+        //control
+        const token = req.headers['key'] || req.query.key;
+        const user = decodeToken(token)
+        controlFunction(user.email,'GET ARTISTS')
 
-        snapshot.forEach((doc) => {
+        const data  = db.collection('artist')
+        const query = await data.where('delete', '!=', true).get()
+        let artists = []
+        query.forEach((doc) => {
             let id = doc.id;
-            let data = doc.data();
-
-            artist.push({id, ...data});
+            let artist = doc.data();
+            artists.push({id, ...artist});
         });
 
-        res.status(200).send(JSON.stringify(artist));
+        response = message(true,artists,null,null,200)
+        return res.send(response);
 
     }catch(err){
-        return res.status(401).send('error show the date')
+        response = message(false,null,err.message,'Error getting artist data.',400)
+        return res.status(400).send(response)
     }
 })
 
-//get one artist
-app.get('/artist/:id_artist', validateToken, async(req,res)=>{
+//Get data of one artist
+app.get('/artist/:id_artist', validateToken,  async(req,res)=>{
     try{
-        const date = db.collection('artist').doc(req.params.id_artist);
-        const item = await date.get();
-        const response = item.data();
-        res.status(200).json(response);
+        const data = await db.collection('artist').doc(req.params.id_artist).get();
+        const artist = data.data();
+
+         //control
+        const token = req.headers['key'] || req.query.key;
+        const user = decodeToken(token)
+        controlFunction(user.email,'GET ONE ARTIST')
+
+        response = message(true,artist,null,'Artist retrieved successfuly',200) 
+        return res.status(200).send(response);
+
     }catch(err){
-        return res.status(400).send('error')
+        response = message(false,null,err.message,'Error getting one artist data.',400) 
+        return res.status(200).send(response);
     }
 })
 
-//update date
+//Update data of a artist
 app.put('/artist/:id_artist', validateToken, async(req,res)=>{
     try{
-        const date = db.collection('artist').doc(req.params.id_artist)
-        await date.update({
-            name: req.body.name,
-        })
-        return res.status(200).send('update')
+        const data = db.collection('artist').doc(req.params.id_artist)
+        const {name, genre} = req.body
+        if(name){
+            await data.update({
+                name: name,
+            })
+        }
+        if(genre){
+            await data.update({
+                genre: genre,
+            })
+        }
+        const dataUpdate = await db.collection('artist').doc(req.params.id_artist).get()
+        const artist = dataUpdate.data(); 
+
+         //control
+        const token = req.headers['key'] || req.query.key;
+        const user = decodeToken(token)
+        controlFunction(user.email,'UPDATE ARTIST')
+
+        response = message(true,artist,null,'Artist successfully updated.',200)
+        return res.status(200).send(response)
+
     }catch(err){
-        return res.status(400).json(err)
-    }
-})
-
-//serch date
-app.get( `/artist/search`, validateToken, async(req,res) =>{
-    try{
-        const query = req.query.name
-        const snapshot = await db.collection('artist').where('name', '==', query).get()
-        const data = snapshot.docs.map((doc) => doc.data());
-        return res.status(200).send(JSON.stringify(data))
-
-    }catch{
-        return res.status(400).send('Artist not found')
+        response = message(false,null,err.message,'Artist not successfully updated.',400)
+        return res.status(400).send(response)
     }
 })
 
 
-//delete one artist
-app.delete('/artist/:id_artist', validateToken, async(req,res)=>{
+//Delete one artist
+app.delete('/artist/:id_artist', validateToken , async(req,res)=>{
     try {
-        const date = db.collection('artist').doc(req.params.id_artist)
-        await date.delete()
-        return res.status(200).send('artist delete')
+        const data = db.collection('artist').doc(req.params.id_artist)
+        await data.update({
+            delete: true
+        })
+
+        //control
+        const token = req.headers['key'] || req.query.key;
+        const user = decodeToken(token)
+        controlFunction(user.email,'DELETE ONE ARTIST')
+
+        respose = message(true,null,null,'Artist deleted successfuly',200)
+        return res.status(200).send(response)
     }catch(err){
+        response = message(false,null,err.message,'Artist not deleted successfuly',400)
         return res.status(400).send('error')
     }
-
 })
 
-//add date
-app.post('/artist', validateToken, async(req,res)=>{
-    try{
-        const {name, genre} = req.body;
-        if (!name || !genre) {
-            return res.status(400).json({error: 'Email and password are required'});
-        }
-
-        const artist = {
-            name: name,
-            genre: genre
-        }
-
-        await db.collection('artist').add(artist);
-
-    }catch(err){
-        return res.status(400).send('error to add date');
-    }
-})
-
-//create new user
+//Create new user
 app.post('/api/users', async (req, res) => {
     try {
         const {email, password} = req.body;
-
         if (!email || !password) {
           return res.status(400).json({error: 'Email and password are required'});
         }
-
         const userCredentials = {
             email:email,
             password: password,
+            delete: false,
         }
         const accessToken = generateAccessToken(userCredentials);
 
@@ -133,23 +197,82 @@ app.post('/api/users', async (req, res) => {
         }
 
         await db.collection("users").add(user);
-        console.log(accessToken)
-        res.header('authorization', accessToken);
-        res.json({accessToken: accessToken});
+        
+        //control
+        const token = req.headers['key'] || req.query.key;
+        const userControl = decodeToken(token)
+        controlFunction(userControl.email,'USER CREATED')
 
-    }catch (error){
-        console.error('Error creating user:', error);
-        return res.status(400)
+
+        response = message(true,user,null,'User created successfuly',200)
+        return res.status(200).send(response)
+
+    }catch (err){
+        response = message(false,null,err.message,'User not created successfuly',200)
+        return res.status(400).send(response)
     }
 });
 
+//Get data of a users
+app.get('/api/users', validateToken, async (req,res) =>{
+    try {
+        const data = db.collection("users")
+        const query = await data.where('delete', '!=', true).get()
+        let users = []
+        query.forEach((doc) =>{
+            let id = doc.id
+            let user = doc.data()
+            users.push({id, ...user});
+        })
+
+        //control
+        const token = req.headers['key'] || req.query.key;
+        const user = decodeToken(token)
+        controlFunction(user.email,'GET USERS')
+
+        response = message(true,users,null,'User retrieved successfuly',200)
+        return res.status(200).send(response)
+
+    } catch (err) {
+        response = message(false,null,err.message,null,400)
+        return res.status(400).send(response)
+    }
+})
+
+//Get one user
+app.get('/api/users/:id_user', validateToken, async(req, res) =>{
+    try {
+        const data = await db.collection('users').doc(req.params.id_user).get()
+        const user = data.data();
+
+        response = message(true,user,null,'User retrieved successfuly',200)
+        res.status(200).send(response)
+
+    } catch (err) {
+        response = message(false,null,err.message,'User not retrieved successfuly',400)
+        return res.status(400).send(response)
+    }
+})
+
+function decodeToken(token){
+    try{
+        let Token = JSON.parse(atob(token.split('.')[1]));
+        console.log(Token)
+        return Token
+    }catch(err){
+        console.log(err.message)
+        return null
+    }    
+}
+
 function generateAccessToken(user) {
-    return jwt.sign(user, process.env.SECRET, {expiresIn: '60m'});
+    return jwt.sign(user, process.env.SECRET);
 }
 
 function validateToken(req,res,next){
-    const accessToken = req.headers['authorization'] || req.query.key;
-    if(!accessToken) res.send('Access denied');
+    const accessToken = req.headers['key'] || req.query.key;
+    response = message(false,null,null,'ACCESS DENIED',null)
+    if(!accessToken) res.send(response);
 
     jwt.verify(accessToken, process.env.SECRET, (err, user) =>{
         if(err){
