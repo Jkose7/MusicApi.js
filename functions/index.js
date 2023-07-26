@@ -157,7 +157,7 @@ app.put('/artist/:id_artist', validateToken, async(req,res)=>{
 
 
 //Delete one artist
-app.delete('/artist/:id_artist', validateToken , async(req,res)=>{
+app.delete('/artist/:id_artist', validateToken, async(req,res)=>{
     try {
         const data = db.collection('artist').doc(req.params.id_artist)
         await data.update({
@@ -169,11 +169,11 @@ app.delete('/artist/:id_artist', validateToken , async(req,res)=>{
         const user = decodeToken(token)
         controlFunction(user.email,'DELETE ONE ARTIST')
 
-        respose = message(true,null,null,'Artist deleted successfuly',200)
+        response = message(true,null,null,'Artist deleted successfuly',200)
         return res.status(200).send(response)
     }catch(err){
         response = message(false,null,err.message,'Artist not deleted successfuly',400)
-        return res.status(400).send('error')
+        return res.status(400).send(response)
     }
 })
 
@@ -257,7 +257,6 @@ app.get('/api/users/:id_user', validateToken, async(req, res) =>{
 function decodeToken(token){
     try{
         let Token = JSON.parse(atob(token.split('.')[1]));
-        console.log(Token)
         return Token
     }catch(err){
         console.log(err.message)
