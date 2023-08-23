@@ -169,7 +169,7 @@ app.delete('/artist/:id_artist', validateToken , async(req,res)=>{
         const user = decodeToken(token)
         controlFunction(user.email,'DELETE ONE ARTIST')
 
-        respose = message(true,null,null,'Artist deleted successfuly',200)
+        response = message(true,null,null,'Artist deleted successfuly',200)
         return res.status(200).send(response)
     }catch(err){
         response = message(false,null,err.message,'Artist not deleted successfuly',400)
@@ -198,17 +198,17 @@ app.post('/api/users', async (req, res) => {
 
         await db.collection("users").add(user);
         
-        //control
+        /*control
         const token = req.headers['key'] || req.query.key;
         const userControl = decodeToken(token)
-        controlFunction(userControl.email,'USER CREATED')
+        controlFunction(userControl.email,'USER CREATED')*/
 
 
         response = message(true,user,null,'User created successfuly',200)
         return res.status(200).send(response)
 
     }catch (err){
-        response = message(false,null,err.message,'User not created successfuly',200)
+        response = message(false,null,err.message,'User not created successfuly',400)
         return res.status(400).send(response)
     }
 });
